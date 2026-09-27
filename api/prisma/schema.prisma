@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  avatarUrl    String?  @map("avatar_url")
+  passwordHash String?  @map("password_hash")
+  googleId     String?  @unique @map("google_id")
+  pushToken    String?  @map("push_token")
+  language     String   @default("pt-BR")
+  theme        String   @default("light")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  goals             Goal[]
+  notifications     Notification[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+// ─── Refresh Token ────────────────────────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─── Goal ─────────────────────────────────────────────────────────────────────
+model Goal {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  title        String
+  description  String?
+  icon         String?
+  color        String?
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime  @map("end_date")
+  isCompleted  Boolean   @default(false) @map("is_completed")
+  completedAt  DateTime? @map("completed_at")
+  targetValue  Float?    @map("target_value")
+  currentValue Float?    @map("current_value")
+  unit         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones           Milestone[]
+  attributeDefinitions AttributeDefinition[]
+
+  @@index([userId])
+  @@index([userId, isCompleted])
+  @@map("goals")
+}
+
+// ─── Milestone (Checkpoint) ───────────────────────────────────────────────────
+model Milestone {
+  id           String    @id @default(uuid())
+  goalId       String    @map("goal_id")
+  title        String
+  description  String?
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime  @map("end_date")
+  isCompleted  Boolean   @default(false) @map("is_completed")
+  completedAt  DateTime? @map("completed_at")
+  targetValue  Float?    @map("target_value")
+  currentValue Float?    @map("current_value")
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  goal       Goal                 @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  attributes MilestoneAttribute[]
+
+  @@index([goalId])
+  @@index([goalId, isCompleted])
+  @@map("milestones")
+}
+
+// ─── Task (Ação da Submeta) ────────────────────────────────────────────────────
+model Task {
+  id          String    @id @default(uuid())
+  milestoneId String    @map("milestone_id")
+  title       String
+  description String?
+  isCompleted Boolean   @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  dueDate     DateTime? @map("due_date")
+  priority    Int       @default(0)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  milestone  Milestone       @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  attributes TaskAttribute[]
+
+  @@index([milestoneId])
+  @@index([milestoneId, isCompleted])
+  @@map("tasks")
+}
+
+// ─── Attribute Definition ─────────────────────────────────────────────────────
+enum AttributeType {
+  TEXT
+  NUMBER
+  SELECT
+  CHECKBOX
+  DATE
+  CURRENCY
+  PERCENTAGE
+}
+
+model AttributeDefinition {
+  id         String        @id @default(uuid())
+  goalId     String        @map("goal_id")
+  name       String
+  type       AttributeType
+  options    Json?
+  isRequired Boolean       @default(false) @map("is_required")
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  goal                Goal                 @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  milestoneAttributes MilestoneAttribute[]
+  taskAttributes      TaskAttribute[]
+
+  @@index([goalId])
+  @@map("attribute_definitions")
+}
+
+// ─── Milestone Attribute Value ────────────────────────────────────────────────
+model MilestoneAttribute {
+  id                    String   @id @default(uuid())
+  milestoneId           String   @map("milestone_id")
+  attributeDefinitionId String   @map("attribute_definition_id")
+  value                 String
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  milestone           Milestone           @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  attributeDefinition AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([milestoneId, attributeDefinitionId])
+  @@map("milestone_attributes")
+}
+
+// ─── Task Attribute Value ─────────────────────────────────────────────────────
+model TaskAttribute {
+  id                    String   @id @default(uuid())
+  taskId                String   @map("task_id")
+  attributeDefinitionId String   @map("attribute_definition_id")
+  value                 String
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  task                Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  attributeDefinition AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, attributeDefinitionId])
+  @@map("task_attributes")
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+model Notification {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  title         String
+  body          String
+  type          String
+  referenceId   String?   @map("reference_id")
+  referenceType String?   @map("reference_type")
+  isRead        Boolean   @default(false) @map("is_read")
+  scheduledFor  DateTime? @map("scheduled_for")
+  sentAt        DateTime? @map("sent_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
